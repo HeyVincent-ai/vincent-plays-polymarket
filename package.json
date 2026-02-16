@@ -1,0 +1,36 @@
+{
+  "name": "vincent-plays-polymarket",
+  "version": "1.0.0",
+  "description": "CT signals → Vincent sensemaking → Polymarket trades. A live campaign showcasing the Vincent platform.",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "eslint src/",
+    "test": "vitest"
+  },
+  "keywords": [
+    "vincent",
+    "polymarket",
+    "ai-agent",
+    "prediction-markets"
+  ],
+  "author": "HeyVincent",
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.6.2",
+    "dotenv": "^17.3.1",
+    "tsx": "^4.21.0",
+    "twitter-api-v2": "^1.29.0",
+    "typescript": "^5.9.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "vitest": "^4.0.18"
+  }
+}
