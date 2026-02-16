@@ -117,6 +117,7 @@ function rowToSignal(row: any): EnrichedSignal {
         quoteTweets: row.quote_tweets,
       },
       timestamp: new Date(row.timestamp),
+      conversationContext: [],
     },
     signalType: row.signal_type,
     coreClaim: row.core_claim,

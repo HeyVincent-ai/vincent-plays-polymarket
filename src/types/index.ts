@@ -1,5 +1,20 @@
 // ---- Raw Twitter Signal ----
 
+export interface ConversationTweet {
+  tweetId: string;
+  text: string;
+  authorHandle: string;
+  authorFollowers: number;
+  urls: string[];
+  engagement: {
+    likes: number;
+    retweets: number;
+    replies: number;
+    quoteTweets: number;
+  };
+  timestamp: Date;
+}
+
 export interface RawMention {
   tweetId: string;
   text: string;
@@ -18,6 +33,10 @@ export interface RawMention {
   };
   timestamp: Date;
   inReplyToId?: string;
+  /** Parent tweets in the conversation chain, ordered root → leaf (closest parent last) */
+  conversationContext: ConversationTweet[];
+  /** The tweet being quoted, if this is a quote tweet */
+  quotedTweet?: ConversationTweet;
 }
 
 // ---- Enriched Signal ----
