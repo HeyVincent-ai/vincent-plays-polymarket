@@ -10,12 +10,20 @@ import {
   saveSignal,
   getRecentSignals,
   updateContributor,
+  attributeTradeToContributors,
   getUserSignalCountToday,
   getSignalCountToday,
   saveTrade,
   getOpenTrades,
   getTopContributors,
+  getTradeStats,
+  getCampaignState,
+  setCampaignState,
 } from "./store/index.js";
+
+const LAST_SEEN_ID_KEY = "twitter_last_seen_id";
+const CAMPAIGN_START_KEY = "campaign_start_date";
+const LAST_DIGEST_KEY = "last_daily_digest_date";
 
 export class Campaign {
   private twitter: TwitterClient;
@@ -34,6 +42,7 @@ export class Campaign {
     anthropicApiKey: string;
     vincentApiUrl: string;
     vincentApiKey: string;
+    tradeManagerUrl: string;
     config: CampaignConfig;
   }) {
     this.twitter = deps.twitter;
@@ -41,10 +50,25 @@ export class Campaign {
     this.clusterer = new TopicClusterer(deps.anthropicApiKey);
     this.edgeScorer = new EdgeScorer(deps.anthropicApiKey);
     this.sanityChecker = new SanityChecker(deps.anthropicApiKey, deps.config);
-    this.executor = new TradeExecutor(deps.vincentApiUrl, deps.vincentApiKey);
+    this.executor = new TradeExecutor(deps.vincentApiUrl, deps.vincentApiKey, deps.tradeManagerUrl);
     this.composer = new ContentComposer();
     this.config = deps.config;
-    this.startDate = new Date();
+
+    // Restore or initialize campaign start date
+    const savedStart = getCampaignState(CAMPAIGN_START_KEY);
+    if (savedStart) {
+      this.startDate = new Date(savedStart);
+    } else {
+      this.startDate = new Date();
+      setCampaignState(CAMPAIGN_START_KEY, this.startDate.toISOString());
+    }
+
+    // Restore lastSeenId so we don't reprocess mentions after restart
+    const savedLastSeenId = getCampaignState(LAST_SEEN_ID_KEY);
+    if (savedLastSeenId) {
+      this.twitter.setLastSeenId(savedLastSeenId);
+      console.log(`[Campaign] Restored lastSeenId: ${savedLastSeenId}`);
+    }
   }
 
   /**
@@ -55,6 +79,7 @@ export class Campaign {
     console.log(`[Campaign] Starting "Vincent Plays Polymarket" campaign`);
     console.log(`[Campaign] Bankroll: $${this.config.bankroll}`);
     console.log(`[Campaign] Poll interval: ${this.config.pollIntervalSeconds}s`);
+    console.log(`[Campaign] Campaign day: ${this.getDayNumber()}`);
 
     while (this.running) {
       try {
@@ -62,6 +87,14 @@ export class Campaign {
       } catch (err) {
         console.error("[Campaign] Error in main loop:", err);
       }
+
+      // Check if we should send daily digest
+      try {
+        await this.maybeSendDailyDigest();
+      } catch (err) {
+        console.error("[Campaign] Error sending daily digest:", err);
+      }
+
       await this.sleep(this.config.pollIntervalSeconds * 1000);
     }
   }
@@ -91,6 +124,12 @@ export class Campaign {
       return;
     }
     console.log(`[Campaign] Fetched ${mentions.length} new mentions`);
+
+    // Persist lastSeenId after successful fetch
+    const lastSeenId = this.twitter.getLastSeenId();
+    if (lastSeenId) {
+      setCampaignState(LAST_SEEN_ID_KEY, lastSeenId);
+    }
 
     // Rate limit per user
     const rateLimited = mentions.filter((m) => {
@@ -141,13 +180,20 @@ export class Campaign {
       if (order.decision === "TRADE" && order.size > 0) {
         const result = await this.executor.placeBet(order);
         if (result.success) {
-          saveTrade(order, result.txHash);
+          const tradeId = saveTrade(order, result.txHash);
           await this.executor.setExitRules(order);
           console.log(`[Campaign] Trade placed: ${order.direction} on "${order.market.question.slice(0, 50)}" for $${order.size}`);
 
+          // Attribute contributing signals to the trade
+          attributeTradeToContributors(order);
+
           // Publish trade entry thread
-          const tweets = this.composer.composeTradeEntry(order, portfolio);
-          await this.twitter.postThread(tweets);
+          try {
+            const tweets = this.composer.composeTradeEntry(order, portfolio);
+            await this.twitter.postThread(tweets);
+          } catch (err) {
+            console.error("[Campaign] Failed to post trade entry thread:", err);
+          }
         } else {
           console.error(`[Campaign] Trade failed: ${result.error}`);
           saveTrade({ ...order, decision: "PASS" }, undefined);
@@ -156,17 +202,79 @@ export class Campaign {
         saveTrade(order);
         // Only tweet about passes if there were enough signals (interesting content)
         if (order.contributingSignals.length >= this.config.minSignalsToAct) {
-          const tweets = this.composer.composeTradePass(order);
-          await this.twitter.postThread(tweets);
+          try {
+            const tweets = this.composer.composeTradePass(order);
+            await this.twitter.postThread(tweets);
+          } catch (err) {
+            console.error("[Campaign] Failed to post pass thread:", err);
+          }
         }
       } else if (order.decision === "WATCH") {
         saveTrade(order);
         if (order.contributingSignals.length >= 3) {
-          const tweets = this.composer.composeTradeWatch(order);
-          await this.twitter.postThread(tweets);
+          try {
+            const tweets = this.composer.composeTradeWatch(order);
+            await this.twitter.postThread(tweets);
+          } catch (err) {
+            console.error("[Campaign] Failed to post watch thread:", err);
+          }
         }
       }
     }
+  }
+
+  /**
+   * Check if it's time to send a daily digest (once per day, after 6 PM UTC).
+   */
+  private async maybeSendDailyDigest() {
+    const now = new Date();
+    const currentHour = now.getUTCHours();
+
+    // Only send between 18:00-19:00 UTC
+    if (currentHour !== 18) return;
+
+    const todayStr = now.toISOString().split("T")[0];
+    const lastDigest = getCampaignState(LAST_DIGEST_KEY);
+    if (lastDigest === todayStr) return; // Already sent today
+
+    console.log("[Campaign] Sending daily digest...");
+
+    const portfolio = await this.getPortfolioState();
+    const { count: signalsToday, uniqueUsers } = getSignalCountToday();
+    const recentSignals = getRecentSignals(24);
+    const clusters = recentSignals.length >= 2
+      ? await this.clusterer.clusterSignals(recentSignals)
+      : [];
+    const topTopics = clusters.slice(0, 3).map((c) => c.name);
+    const topContributors = getTopContributors(1);
+
+    const bestContributor = topContributors.length > 0
+      ? { handle: topContributors[0].handle, signal: topContributors[0].bestSignal || "multiple signals" }
+      : undefined;
+
+    try {
+      const tweets = this.composer.composeDailyDigest(
+        portfolio,
+        signalsToday,
+        uniqueUsers,
+        topTopics,
+        bestContributor
+      );
+      await this.twitter.postThread(tweets);
+      setCampaignState(LAST_DIGEST_KEY, todayStr);
+      console.log("[Campaign] Daily digest posted.");
+    } catch (err) {
+      console.error("[Campaign] Failed to post daily digest:", err);
+    }
+  }
+
+  /**
+   * Get the current campaign day number.
+   */
+  private getDayNumber(): number {
+    return Math.floor(
+      (Date.now() - this.startDate.getTime()) / (1000 * 60 * 60 * 24)
+    ) + 1;
   }
 
   /**
@@ -175,9 +283,8 @@ export class Campaign {
   async getPortfolioState(): Promise<PortfolioState> {
     const positions = await this.executor.getPositions();
     const openTrades = getOpenTrades();
-    const dayNumber = Math.floor(
-      (Date.now() - this.startDate.getTime()) / (1000 * 60 * 60 * 24)
-    ) + 1;
+    const dayNumber = this.getDayNumber();
+    const stats = getTradeStats();
 
     const totalPositionValue = openTrades.reduce(
       (sum, t) => sum + (t.size || 0),
@@ -204,13 +311,13 @@ export class Campaign {
         enteredAt: new Date(t.created_at),
         theme: "",
       })),
-      totalPnl: 0,
-      totalPnlPercent: 0,
+      totalPnl: stats.pnl,
+      totalPnlPercent: stats.pnl / this.config.bankroll * 100,
       dayNumber,
-      tradesEntered: 0,
-      tradesExited: 0,
-      winCount: 0,
-      lossCount: 0,
+      tradesEntered: stats.trades + openTrades.length,
+      tradesExited: stats.trades,
+      winCount: stats.wins,
+      lossCount: stats.losses,
     };
   }
 

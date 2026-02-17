@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { EnrichedSignal, TopicCluster } from "../types/index.js";
 import { recencyMultiplier } from "../utils/weight.js";
 import { generateId } from "../utils/id.js";
+import { safeParseLLMJson } from "../utils/parse.js";
 
 const CLUSTERING_PROMPT = `You are a topic clustering engine. Given a list of signals (each with topics and core claims), group them into coherent topic clusters.
 
@@ -62,7 +63,7 @@ export class TopicClusterer {
     });
 
     const text = response.content[0].type === "text" ? response.content[0].text : "{}";
-    const parsed = JSON.parse(text);
+    const parsed: any = safeParseLLMJson(text, { clusters: [] }, "Clusterer");
     const now = new Date();
 
     return (parsed.clusters || []).map((c: any) => {

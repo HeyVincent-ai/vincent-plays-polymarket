@@ -1,5 +1,6 @@
 import { TwitterApi } from "twitter-api-v2";
 import type { RawMention, ConversationTweet } from "../types/index.js";
+import { withRetry } from "../utils/retry.js";
 
 const TWEET_FIELDS = ["created_at", "public_metrics", "entities", "conversation_id", "referenced_tweets"] as const;
 const USER_FIELDS = ["public_metrics", "created_at"] as const;
@@ -35,7 +36,11 @@ export class TwitterClient {
    * so the enricher sees what the user is actually pointing at.
    */
   async fetchMentions(): Promise<RawMention[]> {
-    const me = await this.client.v2.me();
+    const me = await withRetry(
+      () => this.client.v2.me(),
+      "Twitter.me()",
+      { maxRetries: 3, baseDelayMs: 2000 }
+    );
     const userId = me.data.id;
 
     const params: Record<string, unknown> = {
@@ -48,7 +53,11 @@ export class TwitterClient {
       params.since_id = this.lastSeenId;
     }
 
-    const timeline = await this.client.v2.userMentionTimeline(userId, params as any);
+    const timeline = await withRetry(
+      () => this.client.v2.userMentionTimeline(userId, params as any),
+      "Twitter.userMentionTimeline()",
+      { maxRetries: 3, baseDelayMs: 5000 }
+    );
 
     const users = new Map(
       (timeline.includes?.users || []).map((u) => [u.id, u])
@@ -155,11 +164,15 @@ export class TwitterClient {
 
     for (let depth = 0; depth < MAX_CONTEXT_DEPTH && currentId; depth++) {
       try {
-        const tweet = await this.client.v2.singleTweet(currentId, {
-          "tweet.fields": [...TWEET_FIELDS],
-          "user.fields": [...USER_FIELDS],
-          expansions: ["author_id"],
-        } as any);
+        const tweet = await withRetry(
+          () => this.client.v2.singleTweet(currentId!, {
+            "tweet.fields": [...TWEET_FIELDS],
+            "user.fields": [...USER_FIELDS],
+            expansions: ["author_id"],
+          } as any),
+          `Twitter.singleTweet(${currentId})`,
+          { maxRetries: 2, baseDelayMs: 2000 }
+        );
 
         const tweetData = tweet.data;
         const tweetAuthor = tweet.includes?.users?.[0];
@@ -207,7 +220,11 @@ export class TwitterClient {
       if (replyToId) {
         params.reply = { in_reply_to_tweet_id: replyToId };
       }
-      const result = await this.client.v2.tweet(text, params);
+      const result = await withRetry(
+        () => this.client.v2.tweet(text, params),
+        "Twitter.tweet(thread)",
+        { maxRetries: 2, baseDelayMs: 3000 }
+      );
       ids.push(result.data.id);
       replyToId = result.data.id;
     }
@@ -219,7 +236,21 @@ export class TwitterClient {
    * Post a single tweet.
    */
   async postTweet(text: string): Promise<string> {
-    const result = await this.client.v2.tweet(text);
+    const result = await withRetry(
+      () => this.client.v2.tweet(text),
+      "Twitter.tweet(single)",
+      { maxRetries: 2, baseDelayMs: 3000 }
+    );
     return result.data.id;
+  }
+
+  /** Get the last seen mention ID (for persistence). */
+  getLastSeenId(): string | undefined {
+    return this.lastSeenId;
+  }
+
+  /** Restore last seen mention ID (from database on restart). */
+  setLastSeenId(id: string) {
+    this.lastSeenId = id;
   }
 }

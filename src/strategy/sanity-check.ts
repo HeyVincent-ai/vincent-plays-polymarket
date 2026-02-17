@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { EdgeOpportunity, PortfolioState, TradeOrder, CampaignConfig } from "../types/index.js";
 import { calculatePositionSize, calculateExitLevels, checkPortfolioConstraints } from "./sizing.js";
 import { generateId } from "../utils/id.js";
+import { safeParseLLMJson } from "../utils/parse.js";
 
 const SANITY_CHECK_PROMPT = `You are a risk-aware prediction market analyst for the "Vincent Plays Polymarket" campaign.
 You are the final check before Vincent commits real capital ($10K bankroll) to a trade.
@@ -136,7 +137,11 @@ export class SanityChecker {
     });
 
     const text = response.content[0].type === "text" ? response.content[0].text : "{}";
-    const parsed = JSON.parse(text);
+    const parsed: any = safeParseLLMJson(
+      text,
+      { decision: "PASS", reasoning: "Failed to parse LLM response", pass_reason: "LLM parse error" },
+      "SanityChecker"
+    );
 
     const size =
       parsed.decision === "TRADE"
