@@ -12,14 +12,24 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
  * - Manager can move assets off-chain for trading
  * - Accountant reports NAV for share pricing
  * - Withdrawals are limited by on-chain liquidity
- * - Asset is hardcoded to Polygon USDC.e
+ * - Asset is hardcoded per chain (Polygon, Polygon Amoy, Base, Base Sepolia)
  */
 contract VincentVault is ERC4626, Ownable {
     using SafeERC20 for IERC20;
 
     // Polygon USDC.e (bridged USDC) token address.
     address public constant USDC_E_POLYGON = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
+    // Polygon Amoy testnet USDC (Circle testnet USDC).
+    address public constant USDC_AMOY = 0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582;
+    // Base mainnet native USDC.
+    address public constant USDC_BASE = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    // Base Sepolia testnet USDC.
+    address public constant USDC_BASE_SEPOLIA = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
+
     uint256 public constant POLYGON_CHAIN_ID = 137;
+    uint256 public constant POLYGON_AMOY_CHAIN_ID = 80002;
+    uint256 public constant BASE_CHAIN_ID = 8453;
+    uint256 public constant BASE_SEPOLIA_CHAIN_ID = 84532;
 
     address public manager;
     address public accountant;
@@ -47,12 +57,19 @@ contract VincentVault is ERC4626, Ownable {
         string memory symbol_,
         address manager_,
         address accountant_
-    ) ERC20(name_, symbol_) ERC4626(IERC20(USDC_E_POLYGON)) Ownable(msg.sender) {
-        require(block.chainid == POLYGON_CHAIN_ID, "VVault: wrong chain");
+    ) ERC20(name_, symbol_) ERC4626(IERC20(_assetForChain(block.chainid))) Ownable(msg.sender) {
         require(manager_ != address(0), "VVault: manager zero");
         require(accountant_ != address(0), "VVault: accountant zero");
         manager = manager_;
         accountant = accountant_;
+    }
+
+    function _assetForChain(uint256 chainId) internal pure returns (address) {
+        if (chainId == POLYGON_CHAIN_ID) return USDC_E_POLYGON;
+        if (chainId == POLYGON_AMOY_CHAIN_ID) return USDC_AMOY;
+        if (chainId == BASE_CHAIN_ID) return USDC_BASE;
+        if (chainId == BASE_SEPOLIA_CHAIN_ID) return USDC_BASE_SEPOLIA;
+        revert("VVault: wrong chain");
     }
 
     function setManager(address newManager) external onlyOwner {

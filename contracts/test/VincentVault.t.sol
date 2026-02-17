@@ -19,6 +19,7 @@ contract MockERC20 is ERC20 {
 
 contract VincentVaultTest is Test {
     address private constant USDC_E_POLYGON = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
+    uint256 private constant POLYGON_CHAIN_ID = 137;
 
     MockERC20 private asset;
     VincentVault private vault;
@@ -29,7 +30,7 @@ contract VincentVaultTest is Test {
     address private alice = address(0x4444);
 
     function setUp() public {
-        vm.chainId(137);
+        vm.chainId(POLYGON_CHAIN_ID);
         MockERC20 implementation = new MockERC20();
         vm.etch(USDC_E_POLYGON, address(implementation).code);
         asset = MockERC20(USDC_E_POLYGON);
@@ -67,5 +68,11 @@ contract VincentVaultTest is Test {
         vm.prank(accountant);
         vm.expectRevert("VVault: insolvent report");
         vault.reportAssets(5e6);
+    }
+
+    function testConstructorRevertsOnUnsupportedChain() public {
+        vm.chainId(1);
+        vm.expectRevert("VVault: wrong chain");
+        new VincentVault("Vincent Vault", "vVAULT", manager, accountant);
     }
 }
