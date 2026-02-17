@@ -108,3 +108,23 @@ export function closeDb() {
     db.close();
   }
 }
+
+/**
+ * Get a persistent campaign state value.
+ */
+export function getCampaignState(key: string): string | undefined {
+  const db = getDb();
+  const row: any = db.prepare(`SELECT value FROM campaign_state WHERE key = ?`).get(key);
+  return row?.value;
+}
+
+/**
+ * Set a persistent campaign state value.
+ */
+export function setCampaignState(key: string, value: string): void {
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO campaign_state (key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(key, value);
+}

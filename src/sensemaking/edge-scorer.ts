@@ -5,6 +5,7 @@ import type {
   EdgeOpportunity,
 } from "../types/index.js";
 import { fetchActiveMarkets } from "./polymarket.js";
+import { safeParseLLMJson } from "../utils/parse.js";
 
 const MARKET_MAPPING_PROMPT = `You are a prediction market analyst. Given a topic cluster (a group of signals from Crypto Twitter) and a list of active Polymarket markets, determine:
 
@@ -93,7 +94,7 @@ export class EdgeScorer {
     });
 
     const text = response.content[0].type === "text" ? response.content[0].text : "{}";
-    const parsed = JSON.parse(text);
+    const parsed: any = safeParseLLMJson(text, { mappings: [] }, "EdgeScorer");
 
     const opportunities: EdgeOpportunity[] = [];
 

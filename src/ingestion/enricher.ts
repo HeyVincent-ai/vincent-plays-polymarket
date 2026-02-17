@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { RawMention, EnrichedSignal, SignalType, Urgency, CampaignConfig } from "../types/index.js";
 import { engagementWeight } from "../utils/weight.js";
 import { generateId } from "../utils/id.js";
+import { safeParseLLMJson } from "../utils/parse.js";
 
 const ENRICHMENT_PROMPT = `You are an AI signal analyst for a prediction market trading campaign.
 
@@ -138,7 +139,7 @@ export class SignalEnricher {
       });
 
       const text = response.content[0].type === "text" ? response.content[0].text : "";
-      const parsed = JSON.parse(text);
+      const parsed: any = safeParseLLMJson(text, { is_noise: true, signal_type: "noise" }, "Enricher");
 
       if (parsed.is_noise || parsed.signal_type === "noise") {
         return null;

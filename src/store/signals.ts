@@ -1,5 +1,5 @@
 import { getDb } from "./db.js";
-import type { EnrichedSignal, Contributor } from "../types/index.js";
+import type { EnrichedSignal, Contributor, TradeOrder } from "../types/index.js";
 
 export function saveSignal(signal: EnrichedSignal) {
   const db = getDb();
@@ -75,6 +75,93 @@ export function updateContributor(signal: EnrichedSignal) {
       signals_sent = signals_sent + 1,
       updated_at = excluded.updated_at
   `).run(signal.raw.user.id, signal.raw.user.handle, new Date().toISOString());
+}
+
+/**
+ * When a trade is executed, attribute it to the contributing signal senders.
+ * Increments signals_that_led_to_trades for each unique contributor,
+ * and sets best_signal for the earliest contributor (first to flag).
+ */
+export function attributeTradeToContributors(order: TradeOrder) {
+  const db = getDb();
+  const now = new Date().toISOString();
+
+  // Deduplicate contributors for this trade
+  const seenUsers = new Set<string>();
+  const sortedSignals = [...order.contributingSignals].sort(
+    (a, b) => a.raw.timestamp.getTime() - b.raw.timestamp.getTime()
+  );
+
+  for (let i = 0; i < sortedSignals.length; i++) {
+    const signal = sortedSignals[i];
+    const userId = signal.raw.user.id;
+    if (seenUsers.has(userId)) continue;
+    seenUsers.add(userId);
+
+    // Increment signals_that_led_to_trades
+    db.prepare(`
+      UPDATE contributors SET
+        signals_that_led_to_trades = signals_that_led_to_trades + 1,
+        updated_at = ?
+      WHERE user_id = ?
+    `).run(now, userId);
+
+    // First contributor in the sorted list was first to flag
+    if (i === 0) {
+      db.prepare(`
+        UPDATE contributors SET
+          first_to_flag_count = first_to_flag_count + 1,
+          best_signal = ?
+        WHERE user_id = ? AND (best_signal IS NULL OR best_signal = '')
+      `).run(
+        `Flagged "${order.market.question.slice(0, 60)}" early`,
+        userId
+      );
+    }
+  }
+}
+
+/**
+ * When a trade is closed profitably, update contributor stats.
+ */
+export function attributeProfitToContributors(
+  contributingSignals: EnrichedSignal[],
+  pnl: number,
+  marketQuestion: string
+) {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const seenUsers = new Set<string>();
+  const perUserPnl = pnl / Math.max(1, new Set(contributingSignals.map(s => s.raw.user.id)).size);
+
+  for (const signal of contributingSignals) {
+    const userId = signal.raw.user.id;
+    if (seenUsers.has(userId)) continue;
+    seenUsers.add(userId);
+
+    if (pnl > 0) {
+      db.prepare(`
+        UPDATE contributors SET
+          profitable_contributions = profitable_contributions + 1,
+          total_pnl_from_signals = total_pnl_from_signals + ?,
+          best_signal = ?,
+          updated_at = ?
+        WHERE user_id = ?
+      `).run(
+        perUserPnl,
+        `Contributed to +$${Math.abs(pnl).toFixed(0)} trade on "${marketQuestion.slice(0, 50)}"`,
+        now,
+        userId
+      );
+    } else {
+      db.prepare(`
+        UPDATE contributors SET
+          total_pnl_from_signals = total_pnl_from_signals + ?,
+          updated_at = ?
+        WHERE user_id = ?
+      `).run(perUserPnl, now, userId);
+    }
+  }
 }
 
 export function getTopContributors(limit = 5): Contributor[] {
