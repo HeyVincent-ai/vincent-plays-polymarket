@@ -8,12 +8,18 @@ import {VincentVault} from "../src/VincentVault.sol";
 contract MockERC20 is ERC20 {
     constructor() ERC20("Mock USD", "mUSD") {}
 
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
+
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
     }
 }
 
 contract VincentVaultTest is Test {
+    address private constant USDC_E_POLYGON = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
+
     MockERC20 private asset;
     VincentVault private vault;
 
@@ -23,40 +29,42 @@ contract VincentVaultTest is Test {
     address private alice = address(0x4444);
 
     function setUp() public {
-        asset = new MockERC20();
+        MockERC20 implementation = new MockERC20();
+        vm.etch(USDC_E_POLYGON, address(implementation).code);
+        asset = MockERC20(USDC_E_POLYGON);
         vm.prank(owner);
-        vault = new VincentVault(asset, "Vincent Vault", "vVAULT", manager, accountant);
+        vault = new VincentVault("Vincent Vault", "vVAULT", manager, accountant);
     }
 
     function testDepositUpdatesReportedAssets() public {
-        asset.mint(alice, 100e18);
+        asset.mint(alice, 100e6);
         vm.startPrank(alice);
-        asset.approve(address(vault), 100e18);
-        vault.deposit(100e18, alice);
+        asset.approve(address(vault), 100e6);
+        vault.deposit(100e6, alice);
         vm.stopPrank();
 
-        assertEq(vault.totalAssets(), 100e18);
-        assertEq(vault.balanceOf(alice), 100e18);
+        assertEq(vault.totalAssets(), 100e6);
+        assertEq(vault.balanceOf(alice), 100e6);
     }
 
     function testPullToManagerLimitsWithdraw() public {
-        asset.mint(alice, 100e18);
+        asset.mint(alice, 100e6);
         vm.startPrank(alice);
-        asset.approve(address(vault), 100e18);
-        vault.deposit(100e18, alice);
+        asset.approve(address(vault), 100e6);
+        vault.deposit(100e6, alice);
         vm.stopPrank();
 
         vm.prank(manager);
-        vault.pullToManager(60e18, manager);
+        vault.pullToManager(60e6, manager);
 
-        assertEq(vault.availableAssets(), 40e18);
-        assertEq(vault.maxWithdraw(alice), 40e18);
+        assertEq(vault.availableAssets(), 40e6);
+        assertEq(vault.maxWithdraw(alice), 40e6);
     }
 
     function testReportAssetsRequiresSolvent() public {
-        asset.mint(address(vault), 10e18);
+        asset.mint(address(vault), 10e6);
         vm.prank(accountant);
         vm.expectRevert("VVault: insolvent report");
-        vault.reportAssets(5e18);
+        vault.reportAssets(5e6);
     }
 }

@@ -12,6 +12,10 @@ This spec documents the on-chain vault behavior and the off-chain accounting mod
 - **Manager**: Vincent strategy runner
 - **Accountant**: multisig
 
+## Asset
+- **USDC.e (bridged USDC) on Polygon**
+- Address: `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`
+
 ## Share Price
 - Share price uses `reportedTotalAssets / totalShares`.
 - `reportedTotalAssets` is set by the accountant and can include off-chain holdings.

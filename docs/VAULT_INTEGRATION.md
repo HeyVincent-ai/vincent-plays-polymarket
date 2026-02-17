@@ -12,6 +12,10 @@ This document describes how the agent and accountant interact with the vault.
 - **Manager**: Vincent strategy runner
 - **Accountant**: multisig
 
+## Asset
+- **USDC.e (bridged USDC) on Polygon**
+- Address: `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`
+
 ## Operational Steps (Weekly)
 1. Snapshot on-chain vault balances and total share supply at cutoff.
 2. Aggregate realized PnL from the trading wallet(s).

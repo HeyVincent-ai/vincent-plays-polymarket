@@ -12,9 +12,13 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
  * - Manager can move assets off-chain for trading
  * - Accountant reports NAV for share pricing
  * - Withdrawals are limited by on-chain liquidity
+ * - Asset is hardcoded to Polygon USDC.e
  */
 contract VincentVault is ERC4626, Ownable {
     using SafeERC20 for IERC20;
+
+    // Polygon USDC.e (bridged USDC) token address.
+    address public constant USDC_E_POLYGON = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
 
     address public manager;
     address public accountant;
@@ -38,12 +42,11 @@ contract VincentVault is ERC4626, Ownable {
     }
 
     constructor(
-        IERC20 asset_,
         string memory name_,
         string memory symbol_,
         address manager_,
         address accountant_
-    ) ERC20(name_, symbol_) ERC4626(asset_) Ownable(msg.sender) {
+    ) ERC20(name_, symbol_) ERC4626(IERC20(USDC_E_POLYGON)) Ownable(msg.sender) {
         require(manager_ != address(0), "VVault: manager zero");
         require(accountant_ != address(0), "VVault: accountant zero");
         manager = manager_;

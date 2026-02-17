@@ -12,6 +12,10 @@ This folder contains the on-chain vault contracts for the campaign.
 - **Manager**: Vincent strategy runner
 - **Accountant**: multisig
 
+## Asset
+- **USDC.e (bridged USDC) on Polygon**
+- Address: `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`
+
 ## Contracts
 - `VincentVault.sol`: ERC-4626 vault with a manager + accountant role and a reported NAV.
 

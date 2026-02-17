@@ -7,6 +7,10 @@ This document defines the weekly accounting, fees, and tip payouts for the vault
 - Share price = `totalAssets / totalShares`.
 - Profits increase share price; losses decrease it.
 
+## Asset
+- **USDC.e (bridged USDC) on Polygon**
+- Address: `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`
+
 ## Epoch
 - Accounting is performed **weekly**.
 - **Cutoff:** Wednesday **10:00 PM PT** (America/Los_Angeles).
