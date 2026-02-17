@@ -23,12 +23,9 @@ This folder contains the on-chain vault contracts for the campaign.
 
 ## Build (Foundry)
 1. Install Foundry: https://book.getfoundry.sh/getting-started/installation
-2. Install deps:
-   - `forge install OpenZeppelin/openzeppelin-contracts`
-   - `forge install foundry-rs/forge-std`
-3. From this folder:
-   - `forge build`
-   - `forge test`
+2. Install deps (recommended): `git submodule update --init --recursive`
+3. Alternative deps install (if you prefer): `forge install OpenZeppelin/openzeppelin-contracts` and `forge install foundry-rs/forge-std`
+4. From this folder: `forge build` and `forge test`
 
 ## Assumptions
 - The manager may move assets off-chain for trading.
