@@ -29,6 +29,7 @@ contract VincentVaultTest is Test {
     address private alice = address(0x4444);
 
     function setUp() public {
+        vm.chainId(137);
         MockERC20 implementation = new MockERC20();
         vm.etch(USDC_E_POLYGON, address(implementation).code);
         asset = MockERC20(USDC_E_POLYGON);

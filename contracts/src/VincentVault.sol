@@ -19,6 +19,7 @@ contract VincentVault is ERC4626, Ownable {
 
     // Polygon USDC.e (bridged USDC) token address.
     address public constant USDC_E_POLYGON = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
+    uint256 public constant POLYGON_CHAIN_ID = 137;
 
     address public manager;
     address public accountant;
@@ -47,6 +48,7 @@ contract VincentVault is ERC4626, Ownable {
         address manager_,
         address accountant_
     ) ERC20(name_, symbol_) ERC4626(IERC20(USDC_E_POLYGON)) Ownable(msg.sender) {
+        require(block.chainid == POLYGON_CHAIN_ID, "VVault: wrong chain");
         require(manager_ != address(0), "VVault: manager zero");
         require(accountant_ != address(0), "VVault: accountant zero");
         manager = manager_;

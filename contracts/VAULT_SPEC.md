@@ -15,6 +15,7 @@ This spec documents the on-chain vault behavior and the off-chain accounting mod
 ## Asset
 - **USDC.e (bridged USDC) on Polygon**
 - Address: `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`
+- Chain ID: `137`
 
 ## Share Price
 - Share price uses `reportedTotalAssets / totalShares`.
