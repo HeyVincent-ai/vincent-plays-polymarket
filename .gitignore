@@ -5,3 +5,7 @@ data/
 *.db
 *.db-wal
 *.db-shm
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/coverage/
